@@ -1,0 +1,44 @@
+---------------
+October 3, 2011
+---------------
+
+This data set accompanies the paper, "Computational Efficiency of Alternative Arterial Offset
+Optimization Algorithms" by Christopher M. Day and Darcy M. Bullock, submitted to Transportation
+Research Record (Paper No. 11-0181) and to appear in print in 2011.  A reprint of the paper is
+included in PDF format.
+
+This data set incldues a KML file that shows the geographic locations of the four intersections used
+for the test system in the paper.
+
+The data contains 8 CSV files named after the intersection number (1,2,3,4) and approach
+(NB = northbound, SB = southbound).
+
+Each CSV contains four tables that lists the number of detected vechile arrivals, or the status
+of effective green, per 1-second bin.
+
+
+  Table                                                Corresponding Variable
+  -------------------------------------------------------------------------------------------
+
+  Probability of Green - Aggregated Distributions      G_{j, \phi, m}
+
+  Vehicle Arrivals - Aggregated Distributions          N_{j, \phi, m}
+
+  Vehicle Arrivals - Cycle by Cycle                    N_{j, \phi, i, m}
+
+  Status of Green - Cycle by Cycle                     G_{j, \phi, i, m}
+
+
+The aggregated distributions are established separately for each hour in the analysis period.
+
+A cycle length of 114 seconds was used for this Saturday timing plan, which ran from 6:00-22:00,
+hence the columns in the each table range from m=0 to m=113.
+
+The first column shows the timestamp for each associated row.  For the aggregated tables, this is
+the hour represented by the data.  For the disaggregate data, this first column shows the zero time
+at the beginning of each cycle.  The second column shows the hour number for the aggregated data,
+while for the disaggregate data it indicates the number of seconds after midnight that the zero time
+takes place.
+
+The recommended Excel format for Column 1 is "hh:mm:ss.0".
+

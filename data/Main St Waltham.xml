@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scenario id="null" name="null" schemaVersion="1.0.20" xmlns:aurora="http://path.berkeley.edu/aurora">
+  <network name="New Network" ml_control="false" q_control="false" dt="300" id="-1">
+    <description>Created by Network Editor version xsd-1.0.20-35-g5b5f92a</description>
+    <position>
+      <point lat="42.376690685266304" lng="-71.23677790164948"/>
+    </position>
+    <MonitorList/>
+    <NetworkList/>
+    <NodeList>
+      <node name="Node -1" type="F" id="-1">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.37731065113016" lng="-71.22916638851166"/>
+        </position>
+      </node>
+      <node name="Node -2" type="F" id="-2">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.377144212668085" lng="-71.23046457767487"/>
+        </position>
+      </node>
+      <node name="Node -3" type="F" id="-3">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.376510157342956" lng="-71.23492777347565"/>
+        </position>
+      </node>
+      <node name="Node -4" type="F" id="-4">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.37630408798404" lng="-71.24275982379913"/>
+        </position>
+      </node>
+      <node name="Node -5" type="F" id="-5">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.376367494012804" lng="-71.23575389385223"/>
+        </position>
+      </node>
+      <node name="Node -6" type="F" id="-6">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.37618520150782" lng="-71.23707354068756"/>
+        </position>
+      </node>
+      <node name="Node -7" type="F" id="-7">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.37628031070692" lng="-71.24661147594452"/>
+        </position>
+      </node>
+      <node name="Node -8" type="F" id="-8">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.37631201374135" lng="-71.24893963336945"/>
+        </position>
+      </node>
+      <node name="Node -9" type="F" id="-9">
+        <outputs/>
+        <inputs/>
+        <position>
+          <point lat="42.37780203830255" lng="-71.22530400753021"/>
+        </position>
+      </node>
+    </NodeList>
+    <LinkList/>
+    <SignalList/>
+    <ODList/>
+    <SensorList/>
+  </network>
+  <settings>
+    <units>US</units>
+  </settings>
+  <SplitRatioProfileSet>
+    <splitratios node_id="-1" dt="300"/>
+    <splitratios node_id="-2" dt="300"/>
+    <splitratios node_id="-3" dt="300"/>
+    <splitratios node_id="-4" dt="300"/>
+    <splitratios node_id="-5" dt="300"/>
+    <splitratios node_id="-6" dt="300"/>
+    <splitratios node_id="-7" dt="300"/>
+    <splitratios node_id="-8" dt="300"/>
+    <splitratios node_id="-9" dt="300"/>
+  </SplitRatioProfileSet>
+</scenario>
