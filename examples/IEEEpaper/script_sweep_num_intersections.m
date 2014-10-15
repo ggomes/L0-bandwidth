@@ -1,8 +1,6 @@
 clear
 close all
 
-add_dependencies()
-
 average_segment_length = 1500;      % [ft]
 cycle = 60;                        % seconds
 green_split = 0.5;

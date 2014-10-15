@@ -1,7 +1,5 @@
 function [ ] = paper_plots(  )
 
-add_dependencies()
-
 plot_scalar_mixture
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

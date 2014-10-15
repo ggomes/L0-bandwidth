@@ -1,5 +1,4 @@
 function []=script_makeallplots()
-add_dependencies()
 
 load(fullfile(fileparts(mfilename('fullpath')),'_storage','ALL'))
 pptfolder = fullfile(fileparts(mfilename('fullpath')),'report');
