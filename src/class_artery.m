@@ -7,8 +7,8 @@ classdef class_artery < handle
         cycle           % [sec] cycle time for coordination
         vi              % [fps] (n-1)x1 inbound speeds
         vo              % [fps] (n-1)x1 outbound speeds
-%         ti              % [fps] (n-1)x1 inbound travel times
-%         to              % [fps] (n-1)x1 outbound travel times
+        ti              % [fps] (n-1)x1 inbound travel times
+        to              % [fps] (n-1)x1 outbound travel times
         optbandwidth    % [sec] optimal total bandwidth
         optbo           % [sec] optimal outbound bandwidth
         optbi           % [sec] optimal inbound bandwidth
@@ -65,11 +65,15 @@ classdef class_artery < handle
             if(i==1)                % remove first segment
                 obj.vi(1) = [];
                 obj.vo(1) = [];
+                obj.ti(1) = [];
+                obj.to(1) = [];
                 obj.x = obj.x-obj.x(2);
                 obj.x(1) = [];
             elseif(i==obj.n)        % remove last segment
                 obj.vi(end) = [];
                 obj.vo(end) = [];
+                obj.ti(end) = [];
+                obj.to(end) = [];
                 obj.x(end) = [];
             else                            % join two segments
                 L1 = obj.x(i) - obj.x(i-1);
@@ -82,6 +86,10 @@ classdef class_artery < handle
                 obj.vi(i-1) = (L1+L2)/(L1/vo1 + L2/vo2);
                 obj.vi(i) = [];
                 obj.vo(i) = [];
+                obj.ti(i-1) = obj.ti(i-1) + obj.ti(i);
+                obj.to(i-1) = obj.to(i-1) + obj.to(i);
+                obj.ti(i) = [];
+                obj.to(i) = [];
                 obj.x(i) = [];
             end
             
@@ -97,6 +105,8 @@ classdef class_artery < handle
             obj.x = [obj.x obj.x(end)+L];
             obj.vi = [obj.vi vin*5280/3600];
             obj.vo = [obj.vo vout*5280/3600];
+            obj.to = [obj.to L/obj.vo];
+            obj.ti = [obj.ti L/obj.vi];
         end
         
         function []=initialize(obj)
@@ -255,17 +265,17 @@ classdef class_artery < handle
             end
             
             % draw bands on each segment
-            [to,ti]=obj.segment_travel_times();
+%             [to,ti]=obj.segment_travel_times();
             
             for i=1:obj.n-1
                 
                 switch obj.windowtype
                     case 'pretimed'
-                        obj.paint_pretimed_inbound_band( band_i,bandoffset_i(i),ti(i),obj.x(i),obj.x(i+1));
-                        obj.paint_pretimed_outbound_band(band_o,bandoffset_o(i),to(i),obj.x(i),obj.x(i+1));
+                        obj.paint_pretimed_inbound_band( band_i,bandoffset_i(i),obj.ti(i),obj.x(i),obj.x(i+1));
+                        obj.paint_pretimed_outbound_band(band_o,bandoffset_o(i),obj.to(i),obj.x(i),obj.x(i+1));
                     case 'gaussian'
-                        obj.paint_gaussian_outbound_band(band_sigma_o,band_mu_o(i),to(i),obj.x(i),obj.x(i+1));
-                        obj.paint_gaussian_inbound_band( band_sigma_i,band_mu_i(i),ti(i),obj.x(i),obj.x(i+1));
+                        obj.paint_gaussian_outbound_band(band_sigma_o,band_mu_o(i),obj.to(i),obj.x(i),obj.x(i+1));
+                        obj.paint_gaussian_inbound_band( band_sigma_i,band_mu_i(i),obj.ti(i),obj.x(i),obj.x(i+1));
                         
                 end
             end
@@ -309,15 +319,15 @@ classdef class_artery < handle
             b=mod(a+obj.cycle/2,obj.cycle)-obj.cycle/2;
         end
         
-        function [to,ti] = segment_travel_times(obj)
-            % Equations (1) and (2).
-            ti = nan(1,obj.n-1);            % [sec]
-            to = nan(1,obj.n-1);            % [sec]
-            for i=1:obj.n-1
-                ti(i) = (obj.x(i)-obj.x(i+1)) / obj.vi(i);
-                to(i) = (obj.x(i+1)-obj.x(i)) / obj.vo(i);
-            end
-        end
+%         function [to,ti] = segment_travel_times(obj)
+%             % Equations (1) and (2).
+%             ti = nan(1,obj.n-1);            % [sec]
+%             to = nan(1,obj.n-1);            % [sec]
+%             for i=1:obj.n-1
+%                 ti(i) = (obj.x(i)-obj.x(i+1)) / obj.vi(i);
+%                 to(i) = (obj.x(i+1)-obj.x(i)) / obj.vo(i);
+%             end
+%         end
         
         function [delta0] = translated_internal_offsets(obj,to,ti)
             % Equations (33) and (34)
@@ -600,10 +610,10 @@ classdef class_artery < handle
             % obj.initialize(); done in "load"
             
             % compute travel times .......................
-            [to,ti]=segment_travel_times(obj);
+%             [to,ti]=segment_travel_times(obj);
             
             % compute translated internal offsets .........
-            delta0 = translated_internal_offsets(obj,to,ti);
+            delta0 = translated_internal_offsets(obj,obj.to,obj.ti);
             
             % mean green intervals ....................
             go = [obj.intersection.go];
@@ -733,7 +743,7 @@ classdef class_artery < handle
             omegaI = obj.modhalf(omegaI);
             
             % translate back into absolute offsets ...............
-            [thetaO,thetaI] = obj.relative2absolute(omegaO,omegaI,to,ti);
+            [thetaO,thetaI] = obj.relative2absolute(omegaO,omegaI,obj.to,obj.ti);
             
             %  copy to intersections ................
             for i=1:obj.n
@@ -748,10 +758,10 @@ classdef class_artery < handle
             addpath(genpath(fullfile(fileparts(fileparts(mfilename('fullpath'))),'milp_solvers')))
             
             % compute travel times .......................
-            [to,ti]=segment_travel_times(obj);
+%             [to,ti]=segment_travel_times(obj);
             
-            to = abs(to/obj.cycle);
-            ti = abs(ti/obj.cycle);
+            to = abs(obj.to/obj.cycle);
+            ti = abs(obj.ti/obj.cycle);
 
             go = [obj.intersection.go]/obj.cycle;
             gi = [obj.intersection.gi]/obj.cycle;
@@ -853,10 +863,10 @@ classdef class_artery < handle
         function [totalbandwidth,bo,bi]=optimize_gaussian(obj)
             
             % compute travel times .......................
-            [to,ti]=segment_travel_times(obj);
+%             [to,ti]=segment_travel_times(obj);
             
             % compute translated internal offsets .........
-            delta0 = translated_internal_offsets(obj,to,ti);
+            delta0 = translated_internal_offsets(obj,obj.to,obj.ti);
             delta_bold = delta0(1)-delta0(2:end);
             
             % mean green intervals ....................
@@ -900,7 +910,7 @@ classdef class_artery < handle
             omegaI = obj.modhalf(omegaI);
             
             % translate back into absolute offsets ...............
-            [thetaO,thetaI] = obj.relative2absolute(omegaO,omegaI,to,ti);
+            [thetaO,thetaI] = obj.relative2absolute(omegaO,omegaI,obj.to,obj.ti);
             
             %  copy to intersections ................
             for i=1:obj.n
