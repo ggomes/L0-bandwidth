@@ -103,10 +103,10 @@ classdef class_artery < handle
                 disp('add an intersection first')
             end
             obj.x = [obj.x obj.x(end)+L];
-            obj.vi = [obj.vi vin*5280/3600];
-            obj.vo = [obj.vo vout*5280/3600];
-            obj.to = [obj.to L/obj.vo];
-            obj.ti = [obj.ti L/obj.vi];
+            obj.vi(end+1) = vin*5280/3600;
+            obj.vo(end+1) = vout*5280/3600;
+            obj.to(end+1) = L/obj.vo(end);
+            obj.ti(end+1) = -L/obj.vi(end);
         end
         
         function []=initialize(obj)
@@ -161,6 +161,36 @@ classdef class_artery < handle
             obj.initialize();
         end
         
+        function []=set_outbound_absolute_offsets(obj,thetaO)
+            thetaI = [obj.intersection.delta] + thetaO;
+            [omegaO,omegaI] = absolute2reltaive(obj,thetaO,thetaI);
+            for i=1:obj.n
+                obj.intersection(i).absoffseto = thetaO(i);
+                obj.intersection(i).absoffseti = thetaI(i);
+                obj.intersection(i).reloffseto = omegaO(i);
+                obj.intersection(i).reloffseti = omegaI(i);
+            end
+        end
+        
+        function []=set_outbound_relative_offsets(obj,omegaO)
+            
+            delta0 = obj.translated_internal_offsets;
+            omegaI = omegaO + delta0' - delta0(1);
+            omegaO = obj.modhalf(omegaO);
+            omegaI = obj.modhalf(omegaI);
+            
+            % translate back into absolute offsets ...............
+            [thetaO,thetaI] = obj.relative2absolute(omegaO,omegaI);
+            
+            %  copy to intersections ................
+            for i=1:obj.n
+                obj.intersection(i).absoffseto = thetaO(i);
+                obj.intersection(i).absoffseti = thetaI(i);
+                obj.intersection(i).reloffseto = omegaO(i);
+                obj.intersection(i).reloffseti = omegaI(i);
+            end 
+        end
+        
     end
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -212,10 +242,10 @@ classdef class_artery < handle
                     gammaO = [obj.intersection.gamma_o];
                     gammaI = [obj.intersection.gamma_i];
                     
-                    [band_sigma_o,band_b_o] = obj.integral_gaussian_product(gammaO,sigmaO);
+                    [band_sigma_o,band_b_o] = integral_gaussian_product(gammaO,sigmaO);
                     band_o = band_b_o*exp(-reloffsetO*band_sigma_o*reloffsetO'/2);
                     
-                    [band_sigma_i,band_b_i] = obj.integral_gaussian_product(gammaI,sigmaI);
+                    [band_sigma_i,band_b_i] = integral_gaussian_product(gammaI,sigmaI);
                     band_i = band_b_i*exp(-reloffsetI*band_sigma_i*reloffsetI'/2);
                     
                     total_band = band_o + band_i;
@@ -301,52 +331,48 @@ classdef class_artery < handle
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% private
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     methods ( Access = private )
         
         function [b]=modhalf(obj,a)
             b=mod(a+obj.cycle/2,obj.cycle)-obj.cycle/2;
         end
         
-        function [delta0] = translated_internal_offsets(obj,to,ti)
+        function [delta0] = translated_internal_offsets(obj)
             % Equations (33) and (34)
             delta = obj.modhalf([obj.intersection.delta]);      % [sec]
             delta0 = nan(1,obj.n);                              % [sec]
             sumtito = 0;
             for i=1:obj.n-1
                 delta0(i) = delta(i) + sumtito;
-                sumtito = sumtito + to(i) - ti(i);
+                sumtito = sumtito + obj.to(i) - obj.ti(i);
             end
             delta0(end) = delta(end) + sumtito;
-            %delta0 = obj.modhalf(delta0);
             delta0 = obj.modhalf(delta0-delta0(1))+delta0(1);
-                % this is an alternative to straight modhalf which attempts
-                % to put all inbound intervals as close to delta0(1) as
-                % possible.
             clear sumtito
         end
         
-        function [thetaO,thetaI] = relative2absolute(obj,omegaO,omegaI,to,ti)
+        function [thetaO,thetaI] = relative2absolute(obj,omegaO,omegaI)            
             thetaI = nan(1,obj.n);
             thetaO = nan(1,obj.n);
             thetaO(1) = 0;
             thetaI(1) = obj.modhalf(obj.intersection(1).delta);
             for i=2:obj.n
-                thetaO(i) = omegaO(i) + thetaO(1) - omegaO(1) + sum(to(1:i-1));
-                thetaI(i) = omegaI(i) + thetaI(1) - omegaI(1) + sum(ti(1:i-1));
+                thetaO(i) = omegaO(i) + thetaO(1) - omegaO(1) + sum(obj.to(1:i-1));
+                thetaI(i) = omegaI(i) + thetaI(1) - omegaI(1) + sum(obj.ti(1:i-1));
             end
             thetaO = obj.modhalf(thetaO);
             thetaI = obj.modhalf(thetaI);
         end
         
-        function [omegaO,omegaI] = absolute2reltaive(obj,thetaO,thetaI,to,ti)
+        function [omegaO,omegaI] = absolute2reltaive(obj,thetaO,thetaI)
             omegaI = nan(1,obj.n);
             omegaO = nan(1,obj.n);
             omegaO(1) = 0;
             omegaI(1) = 0;
             for i=2:obj.n
-                omegaO(i) = thetaO(i) - thetaO(1) - sum(to(1:i-1));
-                omegaI(i) = thetaI(i) - thetaI(1) - sum(ti(1:i-1));
+                omegaO(i) = thetaO(i) - thetaO(1) - sum(obj.to(1:i-1));
+                omegaI(i) = thetaI(i) - thetaI(1) - sum(obj.ti(1:i-1));
             end
             omegaO = obj.modhalf(omegaO);
             omegaI = obj.modhalf(omegaI);
@@ -377,9 +403,9 @@ classdef class_artery < handle
         
         function []=paint_gaussian_window(obj,x,offset,sigma,gamma,isout)
             xx = linspace(-obj.cycle/2,obj.cycle/2);
-            y = obj.eval_gauss(xx,offset,sigma,gamma) + ...
-                obj.eval_gauss(xx,offset+obj.cycle,sigma,gamma) + ...
-                obj.eval_gauss(xx,offset-obj.cycle,sigma,gamma);
+            y = eval_gauss(xx,offset,sigma,gamma) + ...
+                eval_gauss(xx,offset+obj.cycle,sigma,gamma) + ...
+                eval_gauss(xx,offset-obj.cycle,sigma,gamma);
             y = y - min(y);
             y = y/max(y);
             minY = min(obj.x)-100;
@@ -528,7 +554,7 @@ classdef class_artery < handle
             Z=[];   % can be used to hold additional outputs
            
             % compute translated internal offsets .........
-            delta0 = translated_internal_offsets(obj,obj.to,obj.ti);
+            delta0 = obj.translated_internal_offsets;
             
             % mean green intervals ....................
             go = [obj.intersection.go];
@@ -652,19 +678,7 @@ classdef class_artery < handle
             totalbandwidth = bo+bi;
             
             % extract relative offsets ............
-            omegaO = [0;OmegaNstar(1:obj.n-1)];
-            omegaI = omegaO + delta0' - delta0(1);
-            omegaO = obj.modhalf(omegaO);
-            omegaI = obj.modhalf(omegaI);
-            
-            % translate back into absolute offsets ...............
-            [thetaO,thetaI] = obj.relative2absolute(omegaO,omegaI,obj.to,obj.ti);
-            
-            %  copy to intersections ................
-            for i=1:obj.n
-                obj.intersection(i).set_reloffset(omegaO(i),omegaI(i));
-                obj.intersection(i).set_absoffset(thetaO(i),thetaI(i));
-            end
+            obj.set_outbound_relative_offsets([0;OmegaNstar(1:obj.n-1)]);
             
         end
         
@@ -775,7 +789,7 @@ classdef class_artery < handle
         function [totalbandwidth,bo,bi]=optimize_gaussian(obj)
             
             % compute translated internal offsets .........
-            delta0 = translated_internal_offsets(obj,obj.to,obj.ti);
+            delta0 = obj.translated_internal_offsets;
             delta_bold = delta0(1)-delta0(2:end);
             
             % mean green intervals ....................
@@ -785,14 +799,14 @@ classdef class_artery < handle
             gamma_o = [obj.intersection.gamma_o];
             gamma_i = [obj.intersection.gamma_i];
             
-            [Sigma_o,bo_o] = obj.integral_gaussian_product(gamma_o,sigma_o);
-            [Sigma_i,bo_i] = obj.integral_gaussian_product(gamma_i,sigma_i);
+            [Sigma_o,bo_o] = integral_gaussian_product(gamma_o,sigma_o);
+            [Sigma_i,bo_i] = integral_gaussian_product(gamma_i,sigma_i);
             
             alpha_o = delta_bold*Sigma_o*delta_bold' / 2;
             alpha_i = delta_bold*Sigma_i*delta_bold' / 2;
             
-            e_o = obj.find_max_mixture(bo_o,alpha_o,bo_i,alpha_i,0);
-            e_i = obj.find_max_mixture(bo_o,alpha_o,bo_i,alpha_i,1);
+            e_o = find_max_mixture(bo_o,alpha_o,bo_i,alpha_i,0);
+            e_i = find_max_mixture(bo_o,alpha_o,bo_i,alpha_i,1);
             
             Y_eo = bo_o*exp(-alpha_o*e_o.^2) + bo_i*exp(-alpha_i*(1-e_o).^2);
             Y_ei = bo_o*exp(-alpha_o*e_i.^2) + bo_i*exp(-alpha_i*(1-e_i).^2);
@@ -809,24 +823,10 @@ classdef class_artery < handle
             bo = bo_o*exp(-omegaO_star*Sigma_o*omegaO_star'/2);
             bi = bo_i*exp(-omegaI_star*Sigma_i*omegaI_star'/2);
             totalbandwidth = bo+bi;
-            
-            %plotmixture(bo_o,alpha_o,bo_i,alpha_i,e_o,e_i)
-            
-            % extract relative offsets ............
-            omegaO = [0;omegaO_star'];
-            omegaI = omegaO + delta0' - delta0(1);
-            omegaO = obj.modhalf(omegaO);
-            omegaI = obj.modhalf(omegaI);
-            
-            % translate back into absolute offsets ...............
-            [thetaO,thetaI] = obj.relative2absolute(omegaO,omegaI,obj.to,obj.ti);
-            
-            %  copy to intersections ................
-            for i=1:obj.n
-                obj.intersection(i).set_reloffset(omegaO(i),omegaI(i));
-                obj.intersection(i).set_absoffset(thetaO(i),thetaI(i));
-            end
-            
+                        
+            % set offsets ............
+            obj.set_outbound_relative_offsets([0;omegaO_star']);
+
         end
         
         function [band,bandoffset]=compute_band_pretimed(obj,inorout)
@@ -865,10 +865,9 @@ classdef class_artery < handle
                 reloffset = [obj.intersection.reloffseto];
                 sigma = [obj.intersection.sigma_o];
             end
-            
-            
+
             % Mu_o applies to the first intersection
-            [Mu,Sigma] = obj.gaussian_product(reloffset,sigma);
+            [Mu,Sigma] = gaussian_product(reloffset,sigma);
             Mu = absoffset + ( Mu - reloffset) ;
         end
         
@@ -903,67 +902,6 @@ classdef class_artery < handle
             end
         end
     end
-    
-    methods ( Static )
         
-        function [Sigma,bo] = integral_gaussian_product(gamma,sigma)
-            nn = length(sigma);
-            A = zeros(nn-1);
-            for i=2:nn
-                for j=2:nn
-                    A(i-1,j-1) = (sigma(i)*sigma(j))^-2;
-                end
-            end
-            Sigma = diag(sigma(2:end).^-2) - A/sum(sigma.^-2);
-            bo = prod(gamma)/sqrt( ((2*pi)^(nn-1)) * sum(sigma.^-2) * prod(sigma.^2) );
-        end
-        
-        function [Mu,Sigma] = gaussian_product(mu,sigma)
-            SigmaSquare = 1/sum(sigma.^-2);               % Eq (73)
-            Mu = SigmaSquare * sum( mu .* sigma.^-2 );    % Eq (72)
-            Sigma = sqrt(SigmaSquare);
-        end
-        
-        function [e]=find_max_mixture(bo_o,alpha_o,bo_i,alpha_i,start)
-
-            lambda_o = 1/sqrt(2*alpha_o);
-            lambda_i = 1/sqrt(2*alpha_i);
-            
-            k=1;
-            e(k) = start;
-            maxnumsteps = 10000;
-            while(k<maxnumsteps)
-                if(e(k)>lambda_o && e(k)<1-lambda_i)
-                    if(start==0)
-                        e(k+1) = lambda_o - 1e-3;
-                    else
-                        e(k+1) = 1-lambda_i + 1e-3;
-                    end
-                else
-                    xi_d_o  = -2*alpha_o * bo_o * e(k) * exp(-alpha_o*e(k)^2);                                  % Eq. (64)
-                    xi_dd_o =  2*alpha_o * bo_o * ( 2*alpha_o*e(k)^2-1 ) * exp(-2*alpha_o*e(k)^2);              % Eq. (65)
-                    xi_d_i  =  2*alpha_i * bo_i * (1-e(k)) * exp(-alpha_i*(1-e(k))^2);                          % Eq. (66)
-                    xi_dd_i =  2*alpha_i * bo_i * ( 2*alpha_i*(1-e(k))^2-1 ) * exp(-2*alpha_i*(1-e(k))^2);      % Eq. (67)
-                    stepsize = -(xi_d_o+xi_d_i)/(min([0 xi_dd_o]) + min([0 xi_dd_i]));                          % Eq. (68)
-                    if(abs(stepsize)>50)
-                        disp('large step')
-                    end
-                    if( abs(stepsize)<1e-10 )
-                        break;
-                    end
-                    e(k+1) = e(k) + stepsize;
-                end
-                k=k+1;
-                
-            end
-            
-        end
-        
-        function [y]=eval_gauss(x,mu,sigma,gamma)
-            y = gamma * exp( -((x-mu).^2)/2/sigma^2 )/sqrt(2*pi)/sigma;
-        end
-        
-    end
-    
 end
 

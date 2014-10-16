@@ -21,10 +21,7 @@ classdef class_intersection < handle
         sigma_i     % [sec]
         gamma_o     % [-]
         gamma_i     % [-]
-        
-    end
- 
-    properties( Access = public )
+
         absoffseto      % [sec]
         absoffseti      % [sec]
         reloffseto      % [sec]
@@ -79,9 +76,7 @@ classdef class_intersection < handle
         end
         
         function [obj]=initialize(obj,windowtype)
-            
             obj.delta = obj.deltasplit * obj.myArtery.cycle;
-            
             switch windowtype
                 case 'pretimed'
                     obj.go    = obj.gsplit_o   * obj.myArtery.cycle;
@@ -95,31 +90,7 @@ classdef class_intersection < handle
                     obj.gamma_i = xgi;
             end
         end
-       
-        function []=set_reloffset(obj,offo,offi)
-            offo = obj.myArtery.modhalf(offo);
-            offi = obj.myArtery.modhalf(offi);
-%             if(abs(obj.myArtery.modhalf(offi-offo)-obj.delta)<1e-6)
-                obj.reloffseto = offo;
-                obj.reloffseti = offi;
-%             else
-%                 warning('set offset failed')
-%             end
-        end
-        
-        function []=set_absoffset(obj,offo,offi)
-            offo = obj.myArtery.modhalf(offo);
-            offi = obj.myArtery.modhalf(offi);
-            if(abs(obj.myArtery.modhalf(offi-offo)-obj.delta)<1e-6)
-                obj.absoffseto = offo;
-                obj.absoffseti = offi;
-            else
-                obj.absoffseto = nan;
-                obj.absoffseti = nan;
-                warning('set offset failed')
-            end
-        end
-        
+
     end
     
 end
