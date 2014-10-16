@@ -1,6 +1,4 @@
 classdef class_artery < handle
-    %CLASS_ARTERY Summary of this class goes here
-    %   Detailed explanation goes here
     
     properties( Access = public )
         n               % [-] number of intersections
@@ -9,6 +7,8 @@ classdef class_artery < handle
         cycle           % [sec] cycle time for coordination
         vi              % [fps] (n-1)x1 inbound speeds
         vo              % [fps] (n-1)x1 outbound speeds
+%         ti              % [fps] (n-1)x1 inbound travel times
+%         to              % [fps] (n-1)x1 outbound travel times
         optbandwidth    % [sec] optimal total bandwidth
         optbo           % [sec] optimal outbound bandwidth
         optbi           % [sec] optimal inbound bandwidth
@@ -21,6 +21,9 @@ classdef class_artery < handle
         milp_wbar       % optimization variable for milp
     end
     
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% Construct / initialize 
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     methods( Access = public )
         
         function [obj]=class_artery(c,windowtype)
@@ -40,40 +43,6 @@ classdef class_artery < handle
             end
             if(strcmp(obj.windowtype,'pretimed'))
                 obj.pretimed_optimization_method = 'ip';
-            end
-        end
-        
-        % change the cycle but keep the gren times -> recompute split values
-        function [obj]=setCycleKeepGreens(obj,newcycle)
-            
-            % compute smallest acceptable cycle
-            mincycle = -inf;
-            for i=1:obj.n
-                I = obj.intersection(i);
-                mincycle = max([ mincycle (I.go+I.gi)/2 + abs(I.delta) ]);
-                mincycle = max([ mincycle 2*abs(I.delta) ]);
-            end
-            
-            if(newcycle<mincycle)
-                disp(['Failed: the minimum allowable cycle is ' num2str(mincycle)])
-                obj.goodparameters = false;
-                return
-            end
-            
-            for i=1:obj.n
-                obj.intersection(i).gsplit_o   = obj.intersection(i).go / newcycle;
-                obj.intersection(i).gsplit_i   = obj.intersection(i).gi / newcycle;
-                obj.intersection(i).deltasplit = obj.intersection(i).delta / newcycle;
-            end
-            obj.cycle = newcycle;
-            obj.goodparameters = true;
-        end
-        
-        % change the cycle but keep the green splits -> recompute absolute values
-        function [obj]=setCycleKeepSplits(obj,newcycle)
-            obj.cycle = newcycle;
-            for i=1:obj.n
-                obj.intersection(i).initialize(obj.windowtype);
             end
         end
         
@@ -130,18 +99,65 @@ classdef class_artery < handle
             obj.vo = [obj.vo vout*5280/3600];
         end
         
-        function []=setWindowType(obj,str)
-            obj.windowtype = str;
-            obj.initialize();
-        end
-        
         function []=initialize(obj)
             for i=1:obj.n
                 obj.intersection(i).initialize(obj.windowtype);
             end
             obj.goodparameters = true;
         end
+    end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% set
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    methods( Access = public )    
         
+        % change the cycle but keep the gren times -> recompute split values
+        function [obj]=setCycleKeepGreens(obj,newcycle)
+            
+            % compute smallest acceptable cycle
+            mincycle = -inf;
+            for i=1:obj.n
+                I = obj.intersection(i);
+                mincycle = max([ mincycle (I.go+I.gi)/2 + abs(I.delta) ]);
+                mincycle = max([ mincycle 2*abs(I.delta) ]);
+            end
+            
+            if(newcycle<mincycle)
+                disp(['Failed: the minimum allowable cycle is ' num2str(mincycle)])
+                obj.goodparameters = false;
+                return
+            end
+            
+            for i=1:obj.n
+                obj.intersection(i).gsplit_o   = obj.intersection(i).go / newcycle;
+                obj.intersection(i).gsplit_i   = obj.intersection(i).gi / newcycle;
+                obj.intersection(i).deltasplit = obj.intersection(i).delta / newcycle;
+            end
+            obj.cycle = newcycle;
+            obj.goodparameters = true;
+        end
+        
+        % change the cycle but keep the green splits -> recompute absolute values
+        function [obj]=setCycleKeepSplits(obj,newcycle)
+            obj.cycle = newcycle;
+            for i=1:obj.n
+                obj.intersection(i).initialize(obj.windowtype);
+            end
+        end
+        
+        function []=setWindowType(obj,str)
+            obj.windowtype = str;
+            obj.initialize();
+        end
+        
+    end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% optimize / compute band / plot
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    methods( Access = public )
+
         function []=optimize(obj)
             
             if(~obj.goodparameters)
@@ -160,6 +176,43 @@ classdef class_artery < handle
                     
                 case 'gaussian'
                     [obj.optbandwidth,obj.optbo,obj.optbi] = obj.optimize_gaussian();
+            end
+            
+        end
+        
+        function [total_band,band_o,band_i]=compute_total_bandwidth(obj)
+            
+            offsetO = [obj.intersection.absoffseto];
+            offsetI = [obj.intersection.absoffseti];
+            reloffsetO = [obj.intersection.reloffseto];
+            reloffsetI = [obj.intersection.reloffseti];
+            
+            % compute band sizes
+            switch obj.windowtype
+                case 'pretimed'
+                    greenO = [obj.intersection.go];
+                    greenI = [obj.intersection.gi];
+                    band_o = compute_band_pretimed(obj,reloffsetO,offsetO,greenO);
+                    band_i = compute_band_pretimed(obj,reloffsetI,offsetI,greenI);
+                    total_band = band_o + band_i;
+                    
+                case 'gaussian'
+                    sigmaO = [obj.intersection.sigma_o];
+                    sigmaI = [obj.intersection.sigma_i];
+                    
+                    reloffsetO = reloffsetO(2:end);
+                    reloffsetI = reloffsetI(2:end);
+                    
+                    gammaO = [obj.intersection.gamma_o];
+                    gammaI = [obj.intersection.gamma_i];
+                    
+                    [band_sigma_o,band_b_o] = obj.integral_gaussian_product(gammaO,sigmaO);
+                    band_o = band_b_o*exp(-reloffsetO*band_sigma_o*reloffsetO'/2);
+                    
+                    [band_sigma_i,band_b_i] = obj.integral_gaussian_product(gammaI,sigmaI);
+                    band_i = band_b_i*exp(-reloffsetI*band_sigma_i*reloffsetI'/2);
+                    
+                    total_band = band_o + band_i;
             end
             
         end
@@ -245,72 +298,301 @@ classdef class_artery < handle
             
         end
         
-        function [band,bandoffset]=compute_band_pretimed(obj,reloffset,absoffset,green)
-            
-            % bandoffset is the absolute offset of the center of the band
-            interval = reloffset'*[1 1] + green'/2*[-1 1];
-            a = max(interval(:,1));
-            b = min(interval(:,2));
-            if(b>a)
-                band = b-a;
-                bandoffset = absoffset' - green'/2 + mean([a b]) - interval(:,1);
-            else
-                band = 0;
-                bandoffset = nan*absoffset;
-            end
-        end
-        
-        function [Sigma,Mu]=computebands_gaussian(obj,reloffset,absoffset,sigma)
-            % Mu_o applies to the first intersection
-            [Mu,Sigma] = obj.gaussian_product(reloffset,sigma);
-            Mu = absoffset + ( Mu - reloffset) ;
-        end
+    end
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %% private
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    methods ( Access = private )
         
         function [b]=modhalf(obj,a)
             b=mod(a+obj.cycle/2,obj.cycle)-obj.cycle/2;
         end
         
-        function [total_band,band_o,band_i]=compute_total_bandwidth(obj)
+        function [to,ti] = segment_travel_times(obj)
+            % Equations (1) and (2).
+            ti = nan(1,obj.n-1);            % [sec]
+            to = nan(1,obj.n-1);            % [sec]
+            for i=1:obj.n-1
+                ti(i) = (obj.x(i)-obj.x(i+1)) / obj.vi(i);
+                to(i) = (obj.x(i+1)-obj.x(i)) / obj.vo(i);
+            end
+        end
+        
+        function [delta0] = translated_internal_offsets(obj,to,ti)
+            % Equations (33) and (34)
+            delta = obj.modhalf([obj.intersection.delta]);      % [sec]
+            delta0 = nan(1,obj.n);                              % [sec]
+            sumtito = 0;
+            for i=1:obj.n-1
+                delta0(i) = delta(i) + sumtito;
+                sumtito = sumtito + to(i) - ti(i);
+            end
+            delta0(end) = delta(end) + sumtito;
+            %delta0 = obj.modhalf(delta0);
+            delta0 = obj.modhalf(delta0-delta0(1))+delta0(1);
+                % this is an alternative to straight modhalf which attempts
+                % to put all inbound intervals as close to delta0(1) as
+                % possible.
+            clear sumtito
+        end
+        
+        function [Sigma,bo] = integral_gaussian_product(obj,gamma,sigma)
             
-            offsetO = [obj.intersection.absoffseto];
-            offsetI = [obj.intersection.absoffseti];
-            reloffsetO = [obj.intersection.reloffseto];
-            reloffsetI = [obj.intersection.reloffseti];
+            A = zeros(obj.n-1);
+            for i=2:obj.n
+                for j=2:obj.n
+                    A(i-1,j-1) = (sigma(i)*sigma(j))^-2;
+                end
+            end
+            Sigma = diag(sigma(2:end).^-2) - A/sum(sigma.^-2);
             
-            % compute band sizes
-            switch obj.windowtype
-                case 'pretimed'
-                    greenO = [obj.intersection.go];
-                    greenI = [obj.intersection.gi];
-                    band_o = compute_band_pretimed(obj,reloffsetO,offsetO,greenO);
-                    band_i = compute_band_pretimed(obj,reloffsetI,offsetI,greenI);
-                    total_band = band_o + band_i;
-                    
-                case 'gaussian'
-                    sigmaO = [obj.intersection.sigma_o];
-                    sigmaI = [obj.intersection.sigma_i];
-                    
-                    reloffsetO = reloffsetO(2:end);
-                    reloffsetI = reloffsetI(2:end);
-                    
-                    gammaO = [obj.intersection.gamma_o];
-                    gammaI = [obj.intersection.gamma_i];
-                    
-                    [band_sigma_o,band_b_o] = obj.integral_gaussian_product(gammaO,sigmaO);
-                    band_o = band_b_o*exp(-reloffsetO*band_sigma_o*reloffsetO'/2);
-                    
-                    [band_sigma_i,band_b_i] = obj.integral_gaussian_product(gammaI,sigmaI);
-                    band_i = band_b_i*exp(-reloffsetI*band_sigma_i*reloffsetI'/2);
-                    
-                    total_band = band_o + band_i;
+            bo = prod(gamma)/sqrt( ((2*pi)^(obj.n-1)) * sum(sigma.^-2) * prod(sigma.^2) );
+            
+        end
+        
+        function [Mu,Sigma] = gaussian_product(obj,mu,sigma)
+            SigmaSquare = 1/sum(sigma.^-2);               % Eq (73)
+            Mu = SigmaSquare * sum( mu .* sigma.^-2 );    % Eq (72)
+            Sigma = sqrt(SigmaSquare);
+        end
+        
+        function [e]=find_max_mixture(obj,bo_o,alpha_o,bo_i,alpha_i,start)
+
+            lambda_o = 1/sqrt(2*alpha_o);
+            lambda_i = 1/sqrt(2*alpha_i);
+            
+            k=1;
+            e(k) = start;
+            maxnumsteps = 10000;
+            while(k<maxnumsteps)
+                if(e(k)>lambda_o && e(k)<1-lambda_i)
+                    if(start==0)
+                        e(k+1) = lambda_o - 1e-3;
+                    else
+                        e(k+1) = 1-lambda_i + 1e-3;
+                    end
+                else
+                    xi_d_o  = -2*alpha_o * bo_o * e(k) * exp(-alpha_o*e(k)^2);                                  % Eq. (64)
+                    xi_dd_o =  2*alpha_o * bo_o * ( 2*alpha_o*e(k)^2-1 ) * exp(-2*alpha_o*e(k)^2);              % Eq. (65)
+                    xi_d_i  =  2*alpha_i * bo_i * (1-e(k)) * exp(-alpha_i*(1-e(k))^2);                          % Eq. (66)
+                    xi_dd_i =  2*alpha_i * bo_i * ( 2*alpha_i*(1-e(k))^2-1 ) * exp(-2*alpha_i*(1-e(k))^2);      % Eq. (67)
+                    stepsize = -(xi_d_o+xi_d_i)/(min([0 xi_dd_o]) + min([0 xi_dd_i]));                          % Eq. (68)
+                    if(abs(stepsize)>50)
+                        disp('large step')
+                    end
+                    if( abs(stepsize)<1e-10 )
+                        break;
+                    end
+                    e(k+1) = e(k) + stepsize;
+                end
+                k=k+1;
+                
             end
             
         end
         
-    end
-    
-    methods ( Access = public )
+        function [thetaO,thetaI] = relative2absolute(obj,omegaO,omegaI,to,ti)
+            thetaI = nan(1,obj.n);
+            thetaO = nan(1,obj.n);
+            thetaO(1) = 0;
+            thetaI(1) = obj.modhalf(obj.intersection(1).delta);
+            for i=2:obj.n
+                thetaO(i) = omegaO(i) + thetaO(1) - omegaO(1) + sum(to(1:i-1));
+                thetaI(i) = omegaI(i) + thetaI(1) - omegaI(1) + sum(ti(1:i-1));
+            end
+            thetaO = obj.modhalf(thetaO);
+            thetaI = obj.modhalf(thetaI);
+        end
         
+        function [omegaO,omegaI] = absolute2reltaive(obj,thetaO,thetaI,to,ti)
+            omegaI = nan(1,obj.n);
+            omegaO = nan(1,obj.n);
+            omegaO(1) = 0;
+            omegaI(1) = 0;
+            for i=2:obj.n
+                omegaO(i) = thetaO(i) - thetaO(1) - sum(to(1:i-1));
+                omegaI(i) = thetaI(i) - thetaI(1) - sum(ti(1:i-1));
+            end
+            omegaO = obj.modhalf(omegaO);
+            omegaI = obj.modhalf(omegaI);
+        end
+        
+        function [y]=eval_gauss(obj,x,mu,sigma,gamma)
+            y = gamma * exp( -((x-mu).^2)/2/sigma^2 )/sqrt(2*pi)/sigma;
+        end
+        
+        function []=paint_pretimed_window(obj,x,offset,green,isout)
+            minY = min(obj.x)-100;
+            maxY = max(obj.x)+100;
+            w = (maxY-minY)/50;
+            xx = offset-green/2;
+            if(isout)
+                z = 0.7;
+                x = x-w;
+            else
+                z = 1;
+            end
+            if(xx<-obj.cycle/2 || xx+green>obj.cycle/2)  % split
+                xx = obj.modhalf(xx);
+                h=rectangle('Position',[xx x green w],'FaceColor',z*[1 1 1]);
+                movefront(h);
+                h=rectangle('Position',[xx-obj.cycle x green w],'FaceColor',z*[1 1 1]);
+                movefront(h);
+            else
+                h=rectangle('Position',[xx x green w],'FaceColor',z*[1 1 1]);
+                movefront(h);
+            end
+        end
+        
+        function []=paint_gaussian_window(obj,x,offset,sigma,gamma,isout)
+            xx = linspace(-obj.cycle/2,obj.cycle/2);
+            y = obj.eval_gauss(xx,offset,sigma,gamma) + ...
+                obj.eval_gauss(xx,offset+obj.cycle,sigma,gamma) + ...
+                obj.eval_gauss(xx,offset-obj.cycle,sigma,gamma);
+            y = y - min(y);
+            y = y/max(y);
+            minY = min(obj.x)-100;
+            maxY = max(obj.x)+100;
+            w = (maxY-minY)/50;
+            y = w*y;
+            hold on
+            if(isout)
+                z = 0.7;
+                y = x - y;
+                h=jbfill(gcf,xx,x+0*y,y,z*[1 1 1],[0 0 0],1,1);
+            else
+                z = 1;
+                y = x + y;
+                h=jbfill(gcf,xx,y,x+0*y,z*[1 1 1],[0 0 0],1,1);
+            end
+            movefront(h);
+            
+        end
+        
+        function []=paint_pretimed_inbound_band(obj,band,bandoffset,t,x_i,x_ip)
+            if(band>0)
+                done = false;
+                while( bandoffset + band/2 >= obj.cycle/2 )      % start from leftmost
+                    bandoffset=bandoffset-obj.cycle;
+                end
+                while(~done)
+                    p1 = bandoffset - band/2;
+                    p2 = bandoffset + band/2;
+                    p3 = p1 + t;
+                    p4 = p2 + t;
+                    patch([p1 p3 p4 p2],[x_i x_ip x_ip x_i],'k','FaceColor',0.5*ones(1,3),'EdgeAlpha',0,'FaceAlpha',0.2);
+                    if( min([p3 p4]) < obj.cycle/2 )
+                        bandoffset = bandoffset + obj.cycle;        % keep on increasing bandoffset until out of the picture
+                    else
+                        done = true;
+                    end
+                end
+            end
+        end
+        
+        function []=paint_pretimed_outbound_band(obj,band,bandoffset,t,x_i,x_ip)
+            if(band>0)
+                done = false;
+                while( bandoffset - band/2 <= -obj.cycle/2 )      % start from rightmost
+                    bandoffset = bandoffset + obj.cycle;
+                end
+                while(~done)
+                    p1 = bandoffset - band/2;
+                    p2 = bandoffset + band/2;
+                    p3 = p1 + t;
+                    p4 = p2 + t;
+                    patch([p1 p3 p4 p2],[x_i x_ip x_ip x_i],'k','FaceColor',0.5*ones(1,3),'EdgeAlpha',0,'FaceAlpha',0.2);
+                    if( max([p3 p4]) > -obj.cycle/2)
+                        bandoffset = bandoffset - obj.cycle;
+                    else
+                        done = true;
+                    end
+                    
+                end
+            end
+        end
+        
+        function []=paint_gaussian_inbound_band(obj,sigma,bandoffset,t,x_i,x_ip)
+            
+            band = 3*sigma;
+            nn = round(band*10);
+            zero = zeros(nn,1);
+            done = false;
+            
+            while( bandoffset + band/2 >= obj.cycle/2 )      % start from leftmost
+                bandoffset = bandoffset - obj.cycle;
+            end
+            while(~done)
+                p1 = bandoffset - band/2;
+                p2 = bandoffset + band/2;
+                p3 = p1 + t;
+                p4 = p2 + t;
+                
+                verts = [ [ zero+x_i  linspace(p1,p2,nn)' ] ; ...
+                    [ zero+x_ip linspace(p1,p2,nn)'+t ] ];
+                verts(:,[2 1]) = verts(:,[1 2]);
+                ind = verts(:,2)==1;
+                verts(ind,1)=verts(ind,1)+3;
+                faces = [(1:nn-1)' (2:nn)' (nn+2:2*nn)' (nn+1:2*nn-1)'];
+                p = patch('Faces',faces,'Vertices',verts,'EdgeColor','none');
+                
+                cdata = linspace(0,band,nn-1)';
+                cdata = 1-exp( -(cdata-band/2).^2/sigma );
+                cdata = cdata / max(cdata);
+                set(p,'FaceColor','flat','FaceVertexCData',cdata,'CDataMapping','scaled','FaceAlpha',0.8)
+                if( min([p3 p4]) < obj.cycle/2)
+                    bandoffset = bandoffset + obj.cycle;
+                else
+                    done = true;
+                end
+                
+            end
+            set(gca,'CLim',[0 1])
+            colormap('gray')
+            
+        end
+        
+        function []=paint_gaussian_outbound_band(obj,sigma,bandoffset,t,x_i,x_ip)
+            
+            band = 3*sigma;
+            nn = round(band*10);
+            zero = zeros(nn,1);
+            done = false;
+            
+            while( bandoffset - band/2 <= -obj.cycle/2 )      % start from rightmost
+                bandoffset = bandoffset + obj.cycle;
+            end
+            while(~done)
+                p1 = bandoffset - band/2;
+                p2 = bandoffset + band/2;
+                p3 = p1 + t;
+                p4 = p2 + t;
+                
+                verts = [ [ zero+x_i  linspace(p1,p2,nn)' ] ; ...
+                    [ zero+x_ip linspace(p1,p2,nn)'+t ] ];
+                verts(:,[2 1]) = verts(:,[1 2]);
+                ind = verts(:,2)==1;
+                verts(ind,1)=verts(ind,1)+3;
+                faces = [(1:nn-1)' (2:nn)' (nn+2:2*nn)' (nn+1:2*nn-1)'];
+                p = patch('Faces',faces,'Vertices',verts,'EdgeColor','none');
+                
+                cdata = linspace(0,band,nn-1)';
+                cdata = 1-exp( -(cdata-band/2).^2/sigma );
+                cdata = cdata / max(cdata);
+                set(p,'FaceColor','flat','FaceVertexCData',cdata,'CDataMapping','scaled','FaceAlpha',0.8)
+                if( max([p3 p4]) > -obj.cycle/2)
+                    bandoffset = bandoffset - obj.cycle;
+                else
+                    done = true;
+                end
+                
+            end
+            set(gca,'CLim',[0 1])
+            colormap('gray')
+            
+        end
+             
         function [totalbandwidth,bo,bi]=optimize_pretimed_lp(obj)
             
             Z=[];   % can be used to hold additional outputs
@@ -628,288 +910,25 @@ classdef class_artery < handle
             
         end
         
-        function [to,ti] = segment_travel_times(obj)
-            % Equations (1) and (2).
-            ti = nan(1,obj.n-1);            % [sec]
-            to = nan(1,obj.n-1);            % [sec]
-            for i=1:obj.n-1
-                ti(i) = (obj.x(i)-obj.x(i+1)) / obj.vi(i);
-                to(i) = (obj.x(i+1)-obj.x(i)) / obj.vo(i);
-            end
-        end
-        
-        function [delta0] = translated_internal_offsets(obj,to,ti)
-            % Equations (33) and (34)
-            delta = obj.modhalf([obj.intersection.delta]);      % [sec]
-            delta0 = nan(1,obj.n);                              % [sec]
-            sumtito = 0;
-            for i=1:obj.n-1
-                delta0(i) = delta(i) + sumtito;
-                sumtito = sumtito + to(i) - ti(i);
-            end
-            delta0(end) = delta(end) + sumtito;
-            %delta0 = obj.modhalf(delta0);
-            delta0 = obj.modhalf(delta0-delta0(1))+delta0(1);
-                % this is an alternative to straight modhalf which attempts
-                % to put all inbound intervals as close to delta0(1) as
-                % possible.
-            clear sumtito
-        end
-        
-        function [Sigma,bo] = integral_gaussian_product(obj,gamma,sigma)
+        function [band,bandoffset]=compute_band_pretimed(obj,reloffset,absoffset,green)
             
-            A = zeros(obj.n-1);
-            for i=2:obj.n
-                for j=2:obj.n
-                    A(i-1,j-1) = (sigma(i)*sigma(j))^-2;
-                end
-            end
-            Sigma = diag(sigma(2:end).^-2) - A/sum(sigma.^-2);
-            
-            bo = prod(gamma)/sqrt( ((2*pi)^(obj.n-1)) * sum(sigma.^-2) * prod(sigma.^2) );
-            
-        end
-        
-        function [Mu,Sigma] = gaussian_product(obj,mu,sigma)
-            SigmaSquare = 1/sum(sigma.^-2);               % Eq (73)
-            Mu = SigmaSquare * sum( mu .* sigma.^-2 );    % Eq (72)
-            Sigma = sqrt(SigmaSquare);
-        end
-        
-        function [e]=find_max_mixture(obj,bo_o,alpha_o,bo_i,alpha_i,start)
-
-            lambda_o = 1/sqrt(2*alpha_o);
-            lambda_i = 1/sqrt(2*alpha_i);
-            
-            k=1;
-            e(k) = start;
-            maxnumsteps = 10000;
-            while(k<maxnumsteps)
-                if(e(k)>lambda_o && e(k)<1-lambda_i)
-                    if(start==0)
-                        e(k+1) = lambda_o - 1e-3;
-                    else
-                        e(k+1) = 1-lambda_i + 1e-3;
-                    end
-                else
-                    xi_d_o  = -2*alpha_o * bo_o * e(k) * exp(-alpha_o*e(k)^2);                                  % Eq. (64)
-                    xi_dd_o =  2*alpha_o * bo_o * ( 2*alpha_o*e(k)^2-1 ) * exp(-2*alpha_o*e(k)^2);              % Eq. (65)
-                    xi_d_i  =  2*alpha_i * bo_i * (1-e(k)) * exp(-alpha_i*(1-e(k))^2);                          % Eq. (66)
-                    xi_dd_i =  2*alpha_i * bo_i * ( 2*alpha_i*(1-e(k))^2-1 ) * exp(-2*alpha_i*(1-e(k))^2);      % Eq. (67)
-                    stepsize = -(xi_d_o+xi_d_i)/(min([0 xi_dd_o]) + min([0 xi_dd_i]));                          % Eq. (68)
-                    if(abs(stepsize)>50)
-                        disp('large step')
-                    end
-                    if( abs(stepsize)<1e-10 )
-                        break;
-                    end
-                    e(k+1) = e(k) + stepsize;
-                end
-                k=k+1;
-                
-            end
-            
-        end
-        
-        function [thetaO,thetaI] = relative2absolute(obj,omegaO,omegaI,to,ti)
-            thetaI = nan(1,obj.n);
-            thetaO = nan(1,obj.n);
-            thetaO(1) = 0;
-            thetaI(1) = obj.modhalf(obj.intersection(1).delta);
-            for i=2:obj.n
-                thetaO(i) = omegaO(i) + thetaO(1) - omegaO(1) + sum(to(1:i-1));
-                thetaI(i) = omegaI(i) + thetaI(1) - omegaI(1) + sum(ti(1:i-1));
-            end
-            thetaO = obj.modhalf(thetaO);
-            thetaI = obj.modhalf(thetaI);
-        end
-        
-        function [omegaO,omegaI] = absolute2reltaive(obj,thetaO,thetaI,to,ti)
-            omegaI = nan(1,obj.n);
-            omegaO = nan(1,obj.n);
-            omegaO(1) = 0;
-            omegaI(1) = 0;
-            for i=2:obj.n
-                omegaO(i) = thetaO(i) - thetaO(1) - sum(to(1:i-1));
-                omegaI(i) = thetaI(i) - thetaI(1) - sum(ti(1:i-1));
-            end
-            omegaO = obj.modhalf(omegaO);
-            omegaI = obj.modhalf(omegaI);
-        end
-        
-        function []=paint_pretimed_window(obj,x,offset,green,isout)
-            minY = min(obj.x)-100;
-            maxY = max(obj.x)+100;
-            w = (maxY-minY)/50;
-            xx = offset-green/2;
-            if(isout)
-                z = 0.7;
-                x = x-w;
+            % bandoffset is the absolute offset of the center of the band
+            interval = reloffset'*[1 1] + green'/2*[-1 1];
+            a = max(interval(:,1));
+            b = min(interval(:,2));
+            if(b>a)
+                band = b-a;
+                bandoffset = absoffset' - green'/2 + mean([a b]) - interval(:,1);
             else
-                z = 1;
-            end
-            if(xx<-obj.cycle/2 || xx+green>obj.cycle/2)  % split
-                xx = obj.modhalf(xx);
-                h=rectangle('Position',[xx x green w],'FaceColor',z*[1 1 1]);
-                movefront(h);
-                h=rectangle('Position',[xx-obj.cycle x green w],'FaceColor',z*[1 1 1]);
-                movefront(h);
-            else
-                h=rectangle('Position',[xx x green w],'FaceColor',z*[1 1 1]);
-                movefront(h);
+                band = 0;
+                bandoffset = nan*absoffset;
             end
         end
         
-        function []=paint_gaussian_window(obj,x,offset,sigma,gamma,isout)
-            xx = linspace(-obj.cycle/2,obj.cycle/2);
-            y = obj.eval_gauss(xx,offset,sigma,gamma) + ...
-                obj.eval_gauss(xx,offset+obj.cycle,sigma,gamma) + ...
-                obj.eval_gauss(xx,offset-obj.cycle,sigma,gamma);
-            y = y - min(y);
-            y = y/max(y);
-            minY = min(obj.x)-100;
-            maxY = max(obj.x)+100;
-            w = (maxY-minY)/50;
-            y = w*y;
-            hold on
-            if(isout)
-                z = 0.7;
-                y = x - y;
-                h=jbfill(gcf,xx,x+0*y,y,z*[1 1 1],[0 0 0],1,1);
-            else
-                z = 1;
-                y = x + y;
-                h=jbfill(gcf,xx,y,x+0*y,z*[1 1 1],[0 0 0],1,1);
-            end
-            movefront(h);
-            
-        end
-        
-        function []=paint_pretimed_inbound_band(obj,band,bandoffset,t,x_i,x_ip)
-            if(band>0)
-                done = false;
-                while( bandoffset + band/2 >= obj.cycle/2 )      % start from leftmost
-                    bandoffset=bandoffset-obj.cycle;
-                end
-                while(~done)
-                    p1 = bandoffset - band/2;
-                    p2 = bandoffset + band/2;
-                    p3 = p1 + t;
-                    p4 = p2 + t;
-                    patch([p1 p3 p4 p2],[x_i x_ip x_ip x_i],'k','FaceColor',0.5*ones(1,3),'EdgeAlpha',0,'FaceAlpha',0.2);
-                    if( min([p3 p4]) < obj.cycle/2 )
-                        bandoffset = bandoffset + obj.cycle;        % keep on increasing bandoffset until out of the picture
-                    else
-                        done = true;
-                    end
-                end
-            end
-        end
-        
-        function []=paint_pretimed_outbound_band(obj,band,bandoffset,t,x_i,x_ip)
-            if(band>0)
-                done = false;
-                while( bandoffset - band/2 <= -obj.cycle/2 )      % start from rightmost
-                    bandoffset = bandoffset + obj.cycle;
-                end
-                while(~done)
-                    p1 = bandoffset - band/2;
-                    p2 = bandoffset + band/2;
-                    p3 = p1 + t;
-                    p4 = p2 + t;
-                    patch([p1 p3 p4 p2],[x_i x_ip x_ip x_i],'k','FaceColor',0.5*ones(1,3),'EdgeAlpha',0,'FaceAlpha',0.2);
-                    if( max([p3 p4]) > -obj.cycle/2)
-                        bandoffset = bandoffset - obj.cycle;
-                    else
-                        done = true;
-                    end
-                    
-                end
-            end
-        end
-        
-        function []=paint_gaussian_inbound_band(obj,sigma,bandoffset,t,x_i,x_ip)
-            
-            band = 3*sigma;
-            nn = round(band*10);
-            zero = zeros(nn,1);
-            done = false;
-            
-            while( bandoffset + band/2 >= obj.cycle/2 )      % start from leftmost
-                bandoffset = bandoffset - obj.cycle;
-            end
-            while(~done)
-                p1 = bandoffset - band/2;
-                p2 = bandoffset + band/2;
-                p3 = p1 + t;
-                p4 = p2 + t;
-                
-                verts = [ [ zero+x_i  linspace(p1,p2,nn)' ] ; ...
-                    [ zero+x_ip linspace(p1,p2,nn)'+t ] ];
-                verts(:,[2 1]) = verts(:,[1 2]);
-                ind = verts(:,2)==1;
-                verts(ind,1)=verts(ind,1)+3;
-                faces = [(1:nn-1)' (2:nn)' (nn+2:2*nn)' (nn+1:2*nn-1)'];
-                p = patch('Faces',faces,'Vertices',verts,'EdgeColor','none');
-                
-                cdata = linspace(0,band,nn-1)';
-                cdata = 1-exp( -(cdata-band/2).^2/sigma );
-                cdata = cdata / max(cdata);
-                set(p,'FaceColor','flat','FaceVertexCData',cdata,'CDataMapping','scaled','FaceAlpha',0.8)
-                if( min([p3 p4]) < obj.cycle/2)
-                    bandoffset = bandoffset + obj.cycle;
-                else
-                    done = true;
-                end
-                
-            end
-            set(gca,'CLim',[0 1])
-            colormap('gray')
-            
-        end
-        
-        function []=paint_gaussian_outbound_band(obj,sigma,bandoffset,t,x_i,x_ip)
-            
-            band = 3*sigma;
-            nn = round(band*10);
-            zero = zeros(nn,1);
-            done = false;
-            
-            while( bandoffset - band/2 <= -obj.cycle/2 )      % start from rightmost
-                bandoffset = bandoffset + obj.cycle;
-            end
-            while(~done)
-                p1 = bandoffset - band/2;
-                p2 = bandoffset + band/2;
-                p3 = p1 + t;
-                p4 = p2 + t;
-                
-                verts = [ [ zero+x_i  linspace(p1,p2,nn)' ] ; ...
-                    [ zero+x_ip linspace(p1,p2,nn)'+t ] ];
-                verts(:,[2 1]) = verts(:,[1 2]);
-                ind = verts(:,2)==1;
-                verts(ind,1)=verts(ind,1)+3;
-                faces = [(1:nn-1)' (2:nn)' (nn+2:2*nn)' (nn+1:2*nn-1)'];
-                p = patch('Faces',faces,'Vertices',verts,'EdgeColor','none');
-                
-                cdata = linspace(0,band,nn-1)';
-                cdata = 1-exp( -(cdata-band/2).^2/sigma );
-                cdata = cdata / max(cdata);
-                set(p,'FaceColor','flat','FaceVertexCData',cdata,'CDataMapping','scaled','FaceAlpha',0.8)
-                if( max([p3 p4]) > -obj.cycle/2)
-                    bandoffset = bandoffset - obj.cycle;
-                else
-                    done = true;
-                end
-                
-            end
-            set(gca,'CLim',[0 1])
-            colormap('gray')
-            
-        end
-        
-        function [y]=eval_gauss(obj,x,mu,sigma,gamma)
-            y = gamma * exp( -((x-mu).^2)/2/sigma^2 )/sqrt(2*pi)/sigma;
+        function [Sigma,Mu]=computebands_gaussian(obj,reloffset,absoffset,sigma)
+            % Mu_o applies to the first intersection
+            [Mu,Sigma] = obj.gaussian_product(reloffset,sigma);
+            Mu = absoffset + ( Mu - reloffset) ;
         end
         
         function [str]=toString(obj)
