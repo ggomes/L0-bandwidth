@@ -1,7 +1,5 @@
 function [A]=load_SanPablo(cycle,delta,windowtype)
 
-add_dependencies()
-
 A = class_artery(cycle,windowtype);
 
 % I = class_intersection('Ashby',windowtype,35/110,31/110,-21/110);    % (gbar,g,d)

@@ -1,8 +1,6 @@
 clear
 close all
 
-addpath(fullfile(fileparts(mfilename('fullpath')),'src'))
-
 % decide of the cycle
 % maybe we'll cut Huntington in two parts because of the different cycles
 % for now, let's fix it at: (66+84+88+88+112+112+156+136)/8 = 842/8 = 105.25

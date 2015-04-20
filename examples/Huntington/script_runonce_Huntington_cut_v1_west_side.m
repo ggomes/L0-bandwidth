@@ -1,8 +1,6 @@
 clear
 close all
 
-addpath(fullfile(fileparts(mfilename('fullpath')),'src'))
-
 % decide of the cycle
 % for now, east part, let's fix it at: (112+112+156+136)/4 = 516/4 = 129
 % we could also decide of weights

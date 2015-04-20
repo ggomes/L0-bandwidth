@@ -8,8 +8,6 @@ function []=exp4(facility,delta,windowtype)
 % limit as mult->0 selecting the largest of the two peaks, and 
 % the limit as mult->inft having an analytical form. 
 
-add_dependencies()
-
 if(strcmp(facility,'canal'))
     cycle = 200;
     A = load_Canal(cycle,delta,windowtype);

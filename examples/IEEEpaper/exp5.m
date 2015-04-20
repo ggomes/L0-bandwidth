@@ -3,8 +3,6 @@ function []=exp5(ALL)
 % -------------
 % Surface plots
 
-add_dependencies()
-
 speed = ALL.speed(1);
 numsamples = ALL.numsamples(1);
 

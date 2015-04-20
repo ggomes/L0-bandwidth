@@ -9,8 +9,6 @@ function []=exp3(average_segment_length,cycle,green_split,max_abs_delta,speed,nu
 % more robust.
 % But in fact the pretimed seems more robust.
 
-add_dependencies()
-
 rootfolder = fileparts(fileparts(mfilename('fullpath')));
 
 exp1name = fullfile(rootfolder,'_storage',...

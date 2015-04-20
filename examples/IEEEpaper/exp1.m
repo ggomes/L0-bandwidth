@@ -5,8 +5,6 @@ function [exp1name]=exp1(average_segment_length,cycle,green_split,max_abs_delta,
 % independent variable: number of intersections
 % random variable: Poisson segment lengths
 
-add_dependencies()
-
 rootfolder = fileparts(fileparts(mfilename('fullpath')));
 
 exp1name = fullfile(rootfolder,'_storage',...

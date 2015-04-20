@@ -9,8 +9,6 @@ function []=exp2(exp1name)
 % Conclusion: the gaussian method also delivers to optimal for pretimed
 % windows.
 
-add_dependencies()
-
 if(~exist([exp1name '.mat'],'file'))
     disp('run exp1 first')
     return

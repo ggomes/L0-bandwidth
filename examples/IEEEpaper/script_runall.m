@@ -1,6 +1,5 @@
 clear
 close all
-add_dependencies()
 
 root = fileparts(fileparts(mfilename('fullpath')));
 

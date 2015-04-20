@@ -2,7 +2,6 @@
 
 clear
 close all
-add_dependencies()
 
 rootfolder = fileparts( mfilename('fullpath'));
 datafolder = fullfile(rootfolder,'noblesville_data');

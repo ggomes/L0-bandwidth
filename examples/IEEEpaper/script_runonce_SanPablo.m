@@ -1,6 +1,5 @@
 clear 
 close all     
-add_dependencies()
 
 cycle = 100;
 windowtype = 'gaussian';

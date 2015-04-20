@@ -9,8 +9,6 @@ param.delta             = struct('mean',0.1,'dev',0.1,'min',0,'max',0.2,'dom','R
 param.speed             = struct('mean',nan,'dev',nan,'min',5,'max',25,'dom','N');
 param.num_intersections = struct('mean',nan,'dev',nan,'min',1,'max',8,'dom','N');
 
-add_dependencies()
-
 % rootfolder = fileparts(fileparts(mfilename('fullpath')));
 
 % allocate

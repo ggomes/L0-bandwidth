@@ -1,7 +1,5 @@
 function [A]=load_Canal(cycle,delta,windowtype)
 
-add_dependencies()
-
 A = class_artery(cycle,windowtype);
 
 speed = 16;

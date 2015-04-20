@@ -3,8 +3,6 @@ function [A]=exp0(op,facility,cycle,delta,windowtype)
 % -------------
 % solve for single facility
 
-add_dependencies()
-
 if(strcmp(facility,'canal'))
     A = load_Canal(cycle,delta,windowtype);
 end

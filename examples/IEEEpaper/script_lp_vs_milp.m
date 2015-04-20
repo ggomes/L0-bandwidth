@@ -1,8 +1,6 @@
 clear
 close all
 
-add_dependencies()
-
 cycle = 100;
 delta = 0.1;
 windowtype = 'pretimed';

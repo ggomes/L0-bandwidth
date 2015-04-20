@@ -1,7 +1,5 @@
 function [  ] = bw_tests(  )
 
-add_dependencies()
-
 test_gaussian
 
 testtest
@@ -27,8 +25,6 @@ function []=testtest()
 % test
 clear
 close all
-
-add_dependencies()
 
 method = 'ip';
 cycle = 70;
