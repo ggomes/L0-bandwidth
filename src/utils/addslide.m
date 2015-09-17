@@ -33,19 +33,19 @@ if(~isempty(titletext) && strcmp(neworlast,'new') )
     set(slide.Shapes.Title.TextFrame.TextRange,'Text',titletext);
 end
 
-% Get height and width of slide:
-slide_H = op.PageSetup.SlideHeight;
-slide_W = op.PageSetup.SlideWidth;
-
-% Paste the contents of the Clipboard:
-pic1 = invoke(slide.Shapes,'Paste');
-
-% Get height and width of picture:
-pic_H = get(pic1,'Height');
-pic_W = get(pic1,'Width');
-
-% Center picture on page (below title area):
-set(pic1,'Left',single(max([pos(1)*double(slide_W)-0.5*double(pic_W) 0])));
-set(pic1,'Top' ,single(max([(1-pos(2))*double(slide_H)-0.5*double(pic_H) 0])));
+% % Get height and width of slide:
+% slide_H = op.PageSetup.SlideHeight;
+% slide_W = op.PageSetup.SlideWidth;
+% 
+% % Paste the contents of the Clipboard:
+% pic1 = invoke(slide.Shapes,'Paste');
+% 
+% % Get height and width of picture:
+% pic_H = get(pic1,'Height');
+% pic_W = get(pic1,'Width');
+% 
+% % Center picture on page (below title area):
+% set(pic1,'Left',single(max([pos(1)*double(slide_W)-0.5*double(pic_W) 0])));
+% set(pic1,'Top' ,single(max([(1-pos(2))*double(slide_H)-0.5*double(pic_H) 0])));
 
 return
